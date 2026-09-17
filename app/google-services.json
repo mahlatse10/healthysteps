@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "37080598402",
+    "project_id": "healthysteps-7d86b",
+    "storage_bucket": "healthysteps-7d86b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:37080598402:android:3d044263eec54e6d00f19b",
+        "android_client_info": {
+          "package_name": "com.example.healthysteps"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9ZW-yQOjpAptOZdz5IN20UtDhq3m62qU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
