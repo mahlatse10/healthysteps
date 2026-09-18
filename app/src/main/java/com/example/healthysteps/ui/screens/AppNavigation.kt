@@ -43,7 +43,10 @@ fun AppNavigation(
         composable(Screen.Register.route) {
             RegisterScreen(
                 onRegistrationSuccess = {
-                    navController.navigate(Screen.Dashboard.route) {
+                    // TEMPORARY TEST:
+                    // After successful registration, go to Login
+                    // instead of opening Dashboard.
+                    navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.Register.route) {
                             inclusive = true
                         }
@@ -142,8 +145,10 @@ fun AppNavigation(
 
         composable(Screen.FoodScanner.route) {
             FoodScannerScreen(
-                onFoodFound = {
-                    navController.navigate(Screen.FoodDetails.route)
+                onFoodFound = { barcode ->
+                    navController.navigate(
+                        "${Screen.FoodDetails.route}/$barcode"
+                    )
                 },
                 onBackClick = {
                     navController.popBackStack()
@@ -151,8 +156,16 @@ fun AppNavigation(
             )
         }
 
-        composable(Screen.FoodDetails.route) {
+        composable(
+            route = "${Screen.FoodDetails.route}/{barcode}"
+        ) { backStackEntry ->
+
+            val barcode =
+                backStackEntry.arguments?.getString("barcode")
+                    ?: ""
+
             FoodDetailsScreen(
+                barcode = barcode,
                 onBackClick = {
                     navController.popBackStack()
                 }

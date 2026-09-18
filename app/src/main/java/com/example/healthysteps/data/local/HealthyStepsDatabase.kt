@@ -21,13 +21,17 @@ abstract class HealthyStepsDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): HealthyStepsDatabase {
             return INSTANCE ?: synchronized(this) {
+
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     HealthyStepsDatabase::class.java,
-                    "healthysteps_database"
-                ).build()
+                    "healthysteps_database_v3"
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
 
                 INSTANCE = instance
+
                 instance
             }
         }

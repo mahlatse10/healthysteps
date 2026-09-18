@@ -8,13 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -22,41 +20,26 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.example.healthysteps.data.model.Habit
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import com.example.healthysteps.data.local.HabitEntity
+import com.example.healthysteps.data.remote.ApiClient
+import com.example.healthysteps.data.repository.AuthRepository
+import com.example.healthysteps.ui.viewmodel.HabitViewModel
+import com.example.healthysteps.ReminderScheduler
+import kotlinx.coroutines.launch
 
-private val demoHabits = mutableStateListOf(
-    Habit(
-        id = 1,
-        name = "Drink Water",
-        description = "Drink at least 2 litres of water",
-        category = "Hydration",
-        targetDays = 7,
-        completedDays = 4,
-        currentStreak = 4,
-        longestStreak = 6,
-        xp = 40
-    ),
-    Habit(
-        id = 2,
-        name = "Morning Walk",
-        description = "Walk for at least 20 minutes",
-        category = "Exercise",
-        targetDays = 7,
-        completedDays = 3,
-        currentStreak = 3,
-        longestStreak = 5,
-        xp = 30
-    )
-)
 
 @Composable
 fun LoginScreen(
@@ -65,6 +48,11 @@ fun LoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+
+    val authRepository = remember { AuthRepository() }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -73,48 +61,106 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            "Welcome Back",
+            text = "Welcome Back",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = {
+                email = it
+                errorMessage = ""
+            },
             label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = {
+                password = it
+                errorMessage = ""
+            },
             label = { Text("Password") },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Button(
-            onClick = onLoginSuccess,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Login")
+        if (errorMessage.isNotEmpty()) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
-        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = {
+                when {
+                    email.isBlank() -> {
+                        errorMessage = "Please enter your email."
+                    }
+
+                    password.isBlank() -> {
+                        errorMessage = "Please enter your password."
+                    }
+
+                    else -> {
+                        isLoading = true
+                        errorMessage = ""
+
+                        scope.launch {
+                            val result = authRepository.login(
+                                email = email.trim(),
+                                password = password
+                            )
+
+                            isLoading = false
+
+                            if (result.isSuccess) {
+                                onLoginSuccess()
+                            } else {
+                                errorMessage =
+                                    result.exceptionOrNull()?.message
+                                        ?: "Login failed. Please check your details."
+                            }
+                        }
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
+        ) {
+            Text(
+                text = if (isLoading) {
+                    "Logging in..."
+                } else {
+                    "Login"
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedButton(
             onClick = onRegisterClick,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
         ) {
             Text("Create Account")
         }
     }
 }
+
 
 @Composable
 fun RegisterScreen(
@@ -125,6 +171,11 @@ fun RegisterScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+
+    val authRepository = remember { AuthRepository() }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -133,65 +184,147 @@ fun RegisterScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            "Create Account",
+            text = "Create Account",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         OutlinedTextField(
             value = name,
-            onValueChange = { name = it },
+            onValueChange = {
+                name = it
+                errorMessage = ""
+            },
             label = { Text("Full Name") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = {
+                email = it
+                errorMessage = ""
+            },
             label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = {
+                password = it
+                errorMessage = ""
+            },
             label = { Text("Password") },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         OutlinedTextField(
             value = confirmPassword,
-            onValueChange = { confirmPassword = it },
+            onValueChange = {
+                confirmPassword = it
+                errorMessage = ""
+            },
             label = { Text("Confirm Password") },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (errorMessage.isNotEmpty()) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+        }
 
         Button(
-            onClick = onRegistrationSuccess,
-            modifier = Modifier.fillMaxWidth()
+            onClick = {
+                when {
+                    name.isBlank() -> {
+                        errorMessage = "Please enter your full name."
+                    }
+
+                    email.isBlank() -> {
+                        errorMessage = "Please enter your email."
+                    }
+
+                    password.isBlank() -> {
+                        errorMessage = "Please enter a password."
+                    }
+
+                    password.length < 6 -> {
+                        errorMessage = "Password must be at least 6 characters."
+                    }
+
+                    password != confirmPassword -> {
+                        errorMessage = "Passwords do not match."
+                    }
+
+                    else -> {
+                        isLoading = true
+                        errorMessage = ""
+
+                        scope.launch {
+                            val result = authRepository.register(
+                                name = name,
+                                email = email,
+                                password = password
+                            )
+
+                            isLoading = false
+
+                            if (result.isSuccess) {
+                                onRegistrationSuccess()
+                            } else {
+                                errorMessage =
+                                    result.exceptionOrNull()?.message
+                                        ?: "Registration failed. Please try again."
+                            }
+                        }
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
         ) {
-            Text("Register")
+            Text(
+                text = if (isLoading) {
+                    "Creating Account..."
+                } else {
+                    "Register"
+                }
+            )
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         TextButton(
             onClick = onLoginClick,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
         ) {
             Text("Already have an account? Login")
         }
     }
 }
+
 
 @Composable
 fun DashboardScreen(
@@ -202,43 +335,49 @@ fun DashboardScreen(
     onSettingsClick: () -> Unit,
     onFoodScannerClick: () -> Unit
 ) {
-    val totalXp = demoHabits.sumOf { it.xp }
-    val level = (totalXp / 100) + 1
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(20.dp)
     ) {
         Text(
-            "HealthySteps",
+            text = "HealthySteps",
             style = MaterialTheme.typography.headlineLarge
         )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Text("Your daily health journey")
+        Text("Welcome back!")
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(20.dp)) {
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ) {
                 Text(
-                    "Level $level",
+                    text = "Your Progress",
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Level 1",
                     style = MaterialTheme.typography.headlineSmall
                 )
 
-                Text("$totalXp XP earned")
+                Text("0 XP earned")
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Text("Keep going and build healthy habits!")
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Button(
             onClick = onHabitsClick,
@@ -247,7 +386,7 @@ fun DashboardScreen(
             Text("My Habits")
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = onFoodScannerClick,
@@ -256,7 +395,7 @@ fun DashboardScreen(
             Text("Food Scanner")
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = onProgressClick,
@@ -265,7 +404,7 @@ fun DashboardScreen(
             Text("Progress")
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = onAchievementsClick,
@@ -274,7 +413,7 @@ fun DashboardScreen(
             Text("Achievements")
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
             onClick = onProfileClick,
@@ -283,7 +422,7 @@ fun DashboardScreen(
             Text("Profile")
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
             onClick = onSettingsClick,
@@ -294,11 +433,15 @@ fun DashboardScreen(
     }
 }
 
+
 @Composable
 fun HabitsScreen(
     onAddHabitClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
+    val viewModel: HabitViewModel = viewModel()
+    val habits by viewModel.habits.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -312,12 +455,12 @@ fun HabitsScreen(
             }
 
             Text(
-                "My Habits",
+                text = "My Habits",
                 style = MaterialTheme.typography.headlineMedium
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Button(
             onClick = onAddHabitClick,
@@ -326,73 +469,145 @@ fun HabitsScreen(
             Text("Add New Habit")
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn {
-            items(demoHabits) { habit ->
-                HabitCard(habit)
-                Spacer(Modifier.height(12.dp))
+        if (habits.isEmpty()) {
+
+            Text(
+                text = "You have no habits yet.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Tap \"Add New Habit\" to create your first habit."
+            )
+
+        } else {
+
+            LazyColumn {
+                items(
+                    items = habits,
+                    key = { it.id }
+                ) { habit ->
+
+                    HabitCard(
+                        habit = habit,
+                        onDelete = {
+                            viewModel.deleteHabit(habit)
+                        },
+                        onComplete = {
+                            viewModel.completeHabit(habit)
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             }
         }
     }
 }
 
-@Composable
-private fun HabitCard(habit: Habit) {
-    var completed by remember {
-        mutableStateOf(false)
-    }
 
+@Composable
+private fun HabitCard(
+    habit: HabitEntity,
+    onDelete: () -> Unit,
+    onComplete: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            Row(
+            Text(
+                text = habit.name,
+                style = MaterialTheme.typography.titleLarge
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = habit.category,
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            if (habit.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(habit.description)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            HorizontalDivider()
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                "Progress: ${habit.completedDays}/${habit.targetDays} days"
+            )
+
+            Text(
+                "Current streak: ${habit.currentStreak} days"
+            )
+
+            Text(
+                "Longest streak: ${habit.longestStreak} days"
+            )
+
+            Text("XP: ${habit.xp}")
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val today = remember {
+                java.text.SimpleDateFormat(
+                    "yyyy-MM-dd",
+                    java.util.Locale.getDefault()
+                ).format(java.util.Calendar.getInstance().time)
+            }
+
+            Button(
+                onClick = onComplete,
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                enabled = habit.lastCompletedDate != today
             ) {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        habit.name,
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    Text(habit.category)
-
-                    Text(habit.description)
-                }
-
-                Checkbox(
-                    checked = completed,
-                    onCheckedChange = {
-                        completed = it
+                Text(
+                    if (habit.lastCompletedDate == today) {
+                        "Completed Today ✓"
+                    } else {
+                        "Complete Habit (+10 XP)"
                     }
                 )
             }
 
-            Divider()
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(Modifier.height(8.dp))
-
-            Text("Progress: ${habit.completedDays}/${habit.targetDays} days")
-            Text("Current streak: ${habit.currentStreak} days")
-            Text("XP: ${habit.xp}")
+            OutlinedButton(
+                onClick = onDelete,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Delete Habit")
+            }
         }
     }
 }
+
 
 @Composable
 fun AddHabitScreen(
     onBackClick: () -> Unit
 ) {
+    val viewModel: HabitViewModel = viewModel()
+    val context = LocalContext.current
+
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var reminderEnabled by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -404,45 +619,54 @@ fun AddHabitScreen(
         }
 
         Text(
-            "Add Habit",
+            text = "Add Habit",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         OutlinedTextField(
             value = name,
-            onValueChange = { name = it },
+            onValueChange = {
+                name = it
+                errorMessage = ""
+            },
             label = { Text("Habit Name") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
             value = description,
-            onValueChange = { description = it },
+            onValueChange = {
+                description = it
+            },
             label = { Text("Description") },
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
             value = category,
-            onValueChange = { category = it },
+            onValueChange = {
+                category = it
+            },
             label = { Text("Category") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Daily reminder",
+                text = "Daily reminder",
                 modifier = Modifier.weight(1f)
             )
 
@@ -454,10 +678,41 @@ fun AddHabitScreen(
             )
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (errorMessage.isNotEmpty()) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         Button(
-            onClick = onBackClick,
+            onClick = {
+                if (name.isBlank()) {
+                    errorMessage = "Please enter a habit name."
+                } else {
+
+                    viewModel.addHabit(
+                        name = name.trim(),
+                        description = description.trim(),
+                        category = category.trim(),
+                        reminderEnabled = reminderEnabled
+                    )
+
+                    if (reminderEnabled) {
+                        ReminderScheduler.scheduleDailyReminder(
+                            context = context,
+                            habitId = System.currentTimeMillis(),
+                            habitName = name.trim()
+                        )
+                    }
+
+                    onBackClick()
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Save Habit")
@@ -465,10 +720,33 @@ fun AddHabitScreen(
     }
 }
 
+
 @Composable
 fun ProgressScreen(
     onBackClick: () -> Unit
 ) {
+    val viewModel: HabitViewModel = viewModel()
+    val habits by viewModel.habits.collectAsState()
+
+    val totalCompleted = habits.sumOf { it.completedDays }
+    val totalXp = habits.sumOf { it.xp }
+    val currentStreak = habits.maxOfOrNull { it.currentStreak } ?: 0
+    val longestStreak = habits.maxOfOrNull { it.longestStreak } ?: 0
+
+    val weeklyCompletion = if (habits.isEmpty()) {
+        0
+    } else {
+        val totalTargetDays = habits.sumOf { it.targetDays }
+
+        if (totalTargetDays == 0) {
+            0
+        } else {
+            ((totalCompleted.toDouble() / totalTargetDays) * 100)
+                .toInt()
+                .coerceAtMost(100)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -479,47 +757,79 @@ fun ProgressScreen(
         }
 
         Text(
-            "Progress",
+            text = "Progress",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(20.dp)) {
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ) {
                 Text(
-                    "Weekly Overview",
+                    text = "Weekly Overview",
                     style = MaterialTheme.typography.titleLarge
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Text("Habits completed: 7")
-                Text("Current streak: 4 days")
-                Text("Longest streak: 6 days")
-                Text("Total XP: 70")
-                Text("Weekly completion: 70%")
+                Text("Habits completed: $totalCompleted")
+                Text("Current streak: $currentStreak days")
+                Text("Longest streak: $longestStreak days")
+                Text("Total XP: $totalXp")
+                Text("Weekly completion: $weeklyCompletion%")
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Text("Keep building consistency. Every completed habit counts.")
+        Text(
+            "Keep building consistency. Every completed habit counts."
+        )
     }
 }
+
 
 @Composable
 fun AchievementsScreen(
     onBackClick: () -> Unit
 ) {
+    val viewModel: HabitViewModel = viewModel()
+    val habits by viewModel.habits.collectAsState()
+
+    val totalXp = habits.sumOf { it.xp }
+    val totalCompleted = habits.sumOf { it.completedDays }
+    val longestStreak = habits.maxOfOrNull { it.longestStreak } ?: 0
+
     val achievements = listOf(
-        "First Step" to "Complete your first habit",
-        "Getting Started" to "Earn 50 XP",
-        "One Week" to "Maintain a 7-day streak",
-        "Healthy Routine" to "Complete 25 habits",
-        "Consistency" to "Maintain a 30-day streak"
+        Triple(
+            "First Step",
+            "Complete your first habit",
+            totalCompleted >= 1
+        ),
+        Triple(
+            "Getting Started",
+            "Earn 50 XP",
+            totalXp >= 50
+        ),
+        Triple(
+            "One Week",
+            "Maintain a 7-day streak",
+            longestStreak >= 7
+        ),
+        Triple(
+            "Healthy Routine",
+            "Complete 25 habits",
+            totalCompleted >= 25
+        ),
+        Triple(
+            "Consistency",
+            "Maintain a 30-day streak",
+            longestStreak >= 30
+        )
     )
 
     Column(
@@ -532,30 +842,39 @@ fun AchievementsScreen(
         }
 
         Text(
-            "Achievements",
+            text = "Achievements",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn {
             items(achievements) { achievement ->
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp)
                 ) {
-                    Column(Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
                         Text(
-                            achievement.first,
+                            text = achievement.first,
                             style = MaterialTheme.typography.titleLarge
                         )
 
                         Text(achievement.second)
 
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                        Text("Locked")
+                        Text(
+                            text = if (achievement.third) {
+                                "Unlocked ✓"
+                            } else {
+                                "Locked"
+                            }
+                        )
                     }
                 }
             }
@@ -563,10 +882,18 @@ fun AchievementsScreen(
     }
 }
 
+
 @Composable
 fun ProfileScreen(
     onBackClick: () -> Unit
 ) {
+    val viewModel: HabitViewModel = viewModel()
+    val habits by viewModel.habits.collectAsState()
+
+    val totalXp = habits.sumOf { it.xp }
+    val level = (totalXp / 100) + 1
+    val longestStreak = habits.maxOfOrNull { it.longestStreak } ?: 0
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -577,11 +904,11 @@ fun ProfileScreen(
         }
 
         Text(
-            "Profile",
+            text = "Profile",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
             value = "HealthySteps User",
@@ -591,7 +918,7 @@ fun ProfileScreen(
             readOnly = true
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
             value = "user@example.com",
@@ -601,13 +928,14 @@ fun ProfileScreen(
             readOnly = true
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Text("Level: 1")
-        Text("Total XP: 70")
-        Text("Longest streak: 6 days")
+        Text("Level: $level")
+        Text("Total XP: $totalXp")
+        Text("Longest streak: $longestStreak days")
     }
 }
+
 
 @Composable
 fun SettingsScreen(
@@ -627,18 +955,18 @@ fun SettingsScreen(
         }
 
         Text(
-            "Settings",
+            text = "Settings",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Notifications",
+                text = "Notifications",
                 modifier = Modifier.weight(1f)
             )
 
@@ -650,14 +978,14 @@ fun SettingsScreen(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Dark Mode",
+                text = "Dark Mode",
                 modifier = Modifier.weight(1f)
             )
 
@@ -669,7 +997,7 @@ fun SettingsScreen(
             )
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Button(
             onClick = onLanguageClick,
@@ -679,6 +1007,7 @@ fun SettingsScreen(
         }
     }
 }
+
 
 @Composable
 fun LanguageScreen(
@@ -698,11 +1027,11 @@ fun LanguageScreen(
         }
 
         Text(
-            "Language",
+            text = "Language",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         listOf(
             "English",
@@ -719,7 +1048,7 @@ fun LanguageScreen(
                     .padding(vertical = 4.dp)
             ) {
                 Text(
-                    if (selectedLanguage == language) {
+                    text = if (selectedLanguage == language) {
                         "$language ✓"
                     } else {
                         language
@@ -730,95 +1059,255 @@ fun LanguageScreen(
     }
 }
 
+
 @Composable
 fun FoodScannerScreen(
-    onFoodFound: () -> Unit,
+    onFoodFound: (String) -> Unit,
     onBackClick: () -> Unit
 ) {
-    var barcode by remember { mutableStateOf("") }
+    var barcode by remember {
+        mutableStateOf("")
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(20.dp)
     ) {
-        TextButton(onClick = onBackClick) {
+
+        TextButton(
+            onClick = onBackClick
+        ) {
             Text("Back")
         }
 
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
+
         Text(
-            "Food Scanner",
+            text = "Food Scanner",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            "Enter a barcode to look up nutritional information."
+        Spacer(
+            modifier = Modifier.height(20.dp)
         )
 
-        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Enter a product barcode to look up nutritional information."
+        )
+
+        Spacer(
+            modifier = Modifier.height(16.dp)
+        )
 
         OutlinedTextField(
             value = barcode,
-            onValueChange = { barcode = it },
-            label = { Text("Barcode") },
-            modifier = Modifier.fillMaxWidth()
+            onValueChange = { newValue ->
+                barcode = newValue.filter {
+                    it.isDigit()
+                }
+            },
+            label = {
+                Text("Barcode")
+            },
+            placeholder = {
+                Text("e.g. 6001000000000")
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(
+            modifier = Modifier.height(16.dp)
+        )
 
         Button(
-            onClick = onFoodFound,
-            modifier = Modifier.fillMaxWidth()
+            onClick = {
+                val cleanBarcode = barcode.trim()
+
+                if (cleanBarcode.isNotEmpty()) {
+                    onFoodFound(cleanBarcode)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = barcode.trim().isNotEmpty()
         ) {
             Text("Look Up Food")
         }
 
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            "Camera barcode scanning will be connected during the final scanner integration."
+        Spacer(
+            modifier = Modifier.height(20.dp)
         )
+
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "How it works",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Text(
+                    text = "Enter the barcode printed on a food product. HealthySteps will use Open Food Facts to retrieve available nutritional information."
+                )
+            }
+        }
     }
 }
 
 @Composable
 fun FoodDetailsScreen(
+    barcode: String,
     onBackClick: () -> Unit
 ) {
+    var productName by remember { mutableStateOf("Loading...") }
+    var brand by remember { mutableStateOf("") }
+    var calories by remember { mutableStateOf("Loading...") }
+    var protein by remember { mutableStateOf("Loading...") }
+    var carbohydrates by remember { mutableStateOf("Loading...") }
+    var fat by remember { mutableStateOf("Loading...") }
+    var errorMessage by remember { mutableStateOf("") }
+
+    LaunchedEffect(barcode) {
+
+        try {
+
+            val response = ApiClient.api.getProduct(barcode)
+
+            if (response.status == 1 && response.product != null) {
+
+                val product = response.product
+                val nutrition = product.nutriments
+
+                productName =
+                    product.product_name ?: "Unknown product"
+
+                brand =
+                    product.brands ?: "Unknown brand"
+
+                calories =
+                    nutrition?.energy_kcal_100g
+                        ?.let { "$it kcal / 100g" }
+                        ?: "N/A"
+
+                protein =
+                    nutrition?.proteins_100g
+                        ?.let { "$it g / 100g" }
+                        ?: "N/A"
+
+                carbohydrates =
+                    nutrition?.carbohydrates_100g
+                        ?.let { "$it g / 100g" }
+                        ?: "N/A"
+
+                fat =
+                    nutrition?.fat_100g
+                        ?.let { "$it g / 100g" }
+                        ?: "N/A"
+
+            } else {
+
+                errorMessage =
+                    "Product not found for barcode $barcode."
+
+                productName = "Product not found"
+                brand = ""
+                calories = "N/A"
+                protein = "N/A"
+                carbohydrates = "N/A"
+                fat = "N/A"
+            }
+
+        } catch (e: Exception) {
+
+            errorMessage =
+                "Unable to retrieve product information. Please check your internet connection."
+
+            productName = "Food lookup failed"
+            brand = ""
+            calories = "N/A"
+            protein = "N/A"
+            carbohydrates = "N/A"
+            fat = "N/A"
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(20.dp)
     ) {
+
         TextButton(onClick = onBackClick) {
             Text("Back")
         }
 
         Text(
-            "Food Details",
+            text = "Food Details",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(20.dp)) {
+
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ) {
+
                 Text(
-                    "Product",
+                    text = productName,
                     style = MaterialTheme.typography.titleLarge
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                Text("Calories: N/A")
-                Text("Protein: N/A")
-                Text("Carbohydrates: N/A")
-                Text("Fat: N/A")
-                Text("Brand: N/A")
+                if (brand.isNotBlank()) {
+                    Text("Brand: $brand")
+                }
+
+                Text("Barcode: $barcode")
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                HorizontalDivider()
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Calories: $calories")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("Protein: $protein")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("Carbohydrates: $carbohydrates")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("Fat: $fat")
+
+                if (errorMessage.isNotBlank()) {
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
