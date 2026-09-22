@@ -1163,61 +1163,107 @@ fun FoodScannerScreen(
         }
     }
 }
-
 @Composable
 fun FoodDetailsScreen(
     barcode: String,
     onBackClick: () -> Unit
 ) {
-    var productName by remember { mutableStateOf("Loading...") }
-    var brand by remember { mutableStateOf("") }
-    var calories by remember { mutableStateOf("Loading...") }
-    var protein by remember { mutableStateOf("Loading...") }
-    var carbohydrates by remember { mutableStateOf("Loading...") }
-    var fat by remember { mutableStateOf("Loading...") }
-    var errorMessage by remember { mutableStateOf("") }
+    var productName by remember {
+        mutableStateOf("Loading...")
+    }
+
+    var brand by remember {
+        mutableStateOf("")
+    }
+
+    var calories by remember {
+        mutableStateOf("Loading...")
+    }
+
+    var protein by remember {
+        mutableStateOf("Loading...")
+    }
+
+    var carbohydrates by remember {
+        mutableStateOf("Loading...")
+    }
+
+    var fat by remember {
+        mutableStateOf("Loading...")
+    }
+
+    var errorMessage by remember {
+        mutableStateOf("")
+    }
 
     LaunchedEffect(barcode) {
 
+        if (barcode.isBlank()) {
+            productName = "Invalid barcode"
+            brand = ""
+            calories = "N/A"
+            protein = "N/A"
+            carbohydrates = "N/A"
+            fat = "N/A"
+            errorMessage = "Please enter a valid product barcode."
+            return@LaunchedEffect
+        }
+
         try {
 
-            val response = ApiClient.api.getProduct(barcode)
+            val response = ApiClient.api.getProduct(
+                barcode.trim()
+            )
 
-            if (response.status == 1 && response.product != null) {
+            if (
+                response.status == 1 &&
+                response.product != null
+            ) {
 
                 val product = response.product
                 val nutrition = product.nutriments
 
                 productName =
-                    product.product_name ?: "Unknown product"
+                    product.product_name
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Unknown product"
 
                 brand =
-                    product.brands ?: "Unknown brand"
+                    product.brands
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Unknown brand"
 
                 calories =
                     nutrition?.energy_kcal_100g
-                        ?.let { "$it kcal / 100g" }
+                        ?.let {
+                            "$it kcal / 100g"
+                        }
                         ?: "N/A"
 
                 protein =
                     nutrition?.proteins_100g
-                        ?.let { "$it g / 100g" }
+                        ?.let {
+                            "$it g / 100g"
+                        }
                         ?: "N/A"
 
                 carbohydrates =
                     nutrition?.carbohydrates_100g
-                        ?.let { "$it g / 100g" }
+                        ?.let {
+                            "$it g / 100g"
+                        }
                         ?: "N/A"
 
                 fat =
                     nutrition?.fat_100g
-                        ?.let { "$it g / 100g" }
+                        ?.let {
+                            "$it g / 100g"
+                        }
                         ?: "N/A"
 
-            } else {
+                errorMessage = ""
 
-                errorMessage =
-                    "Product not found for barcode $barcode."
+            } else {
 
                 productName = "Product not found"
                 brand = ""
@@ -1225,12 +1271,12 @@ fun FoodDetailsScreen(
                 protein = "N/A"
                 carbohydrates = "N/A"
                 fat = "N/A"
+
+                errorMessage =
+                    "No product was found for barcode $barcode."
             }
 
         } catch (e: Exception) {
-
-            errorMessage =
-                "Unable to retrieve product information. Please check your internet connection."
 
             productName = "Food lookup failed"
             brand = ""
@@ -1238,6 +1284,9 @@ fun FoodDetailsScreen(
             protein = "N/A"
             carbohydrates = "N/A"
             fat = "N/A"
+
+            errorMessage =
+                "Unable to retrieve product information. Please check your internet connection."
         }
     }
 
@@ -1247,16 +1296,24 @@ fun FoodDetailsScreen(
             .padding(20.dp)
     ) {
 
-        TextButton(onClick = onBackClick) {
+        TextButton(
+            onClick = onBackClick
+        ) {
             Text("Back")
         }
+
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
 
         Text(
             text = "Food Details",
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(
+            modifier = Modifier.height(24.dp)
+        )
 
         Card(
             modifier = Modifier.fillMaxWidth()
@@ -1271,7 +1328,9 @@ fun FoodDetailsScreen(
                     style = MaterialTheme.typography.titleLarge
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
 
                 if (brand.isNotBlank()) {
                     Text("Brand: $brand")
@@ -1279,29 +1338,41 @@ fun FoodDetailsScreen(
 
                 Text("Barcode: $barcode")
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
 
                 HorizontalDivider()
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
 
                 Text("Calories: $calories")
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
 
                 Text("Protein: $protein")
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
 
                 Text("Carbohydrates: $carbohydrates")
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
 
                 Text("Fat: $fat")
 
                 if (errorMessage.isNotBlank()) {
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(
+                        modifier = Modifier.height(16.dp)
+                    )
 
                     Text(
                         text = errorMessage,

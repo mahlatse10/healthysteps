@@ -1,33 +1,23 @@
 package com.example.healthysteps.ui.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.healthysteps.data.local.HabitEntity
-import com.example.healthysteps.data.local.HealthyStepsDatabase
-import com.example.healthysteps.data.repository.HabitRepository
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import com.example.healthysteps.data.local.HabitEntity
 
-class HabitViewModel(application: Application) : AndroidViewModel(application) {
+class HabitViewModel : ViewModel() {
 
-    private val database =
-        HealthyStepsDatabase.getDatabase(application)
+    private val _habits =
+        MutableStateFlow<List<HabitEntity>>(emptyList())
 
-    private val repository =
-        HabitRepository(database.habitDao())
+    val habits: StateFlow<List<HabitEntity>> =
+        _habits.asStateFlow()
 
-    val habits =
-        repository.getAllHabits()
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
+    private var nextId = 1L
 
     fun addHabit(
         name: String,
@@ -41,70 +31,88 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        viewModelScope.launch {
+        val habit = HabitEntity(
+            id = nextId++,
+            name = cleanName,
+            description = description.trim(),
+            category = if (category.isBlank()) {
+                "General"
+            } else {
+                category.trim()
+            },
+            reminderEnabled = reminderEnabled
+        )
 
-            val habit = HabitEntity(
-                name = cleanName,
-                description = description.trim(),
-                category = if (category.isBlank()) {
-                    "General"
-                } else {
-                    category.trim()
-                },
-                reminderEnabled = reminderEnabled
-            )
-
-            repository.insertHabit(habit)
-        }
+        _habits.value = listOf(
+            habit
+        ) + _habits.value
     }
 
     fun deleteHabit(habit: HabitEntity) {
-        viewModelScope.launch {
-            repository.deleteHabit(habit)
-        }
+        _habits.value =
+            _habits.value.filter {
+                it.id != habit.id
+            }
     }
 
     fun completeHabit(habit: HabitEntity) {
 
-        viewModelScope.launch {
+        val today = SimpleDateFormat(
+            "yyyy-MM-dd",
+            Locale.getDefault()
+        ).format(Calendar.getInstance().time)
 
-            val today = SimpleDateFormat(
-                "yyyy-MM-dd",
-                Locale.getDefault()
-            ).format(Calendar.getInstance().time)
+        if (habit.lastCompletedDate == today) {
+            return
+        }
 
-            if (habit.lastCompletedDate == today) {
-                return@launch
+        val yesterdayCalendar =
+            Calendar.getInstance().apply {
+                add(
+                    Calendar.DAY_OF_YEAR,
+                    -1
+                )
             }
 
-            val yesterdayCalendar = Calendar.getInstance().apply {
-                add(Calendar.DAY_OF_YEAR, -1)
+        val yesterday = SimpleDateFormat(
+            "yyyy-MM-dd",
+            Locale.getDefault()
+        ).format(yesterdayCalendar.time)
+
+        val newStreak =
+            if (habit.lastCompletedDate == yesterday) {
+                habit.currentStreak + 1
+            } else {
+                1
             }
 
-            val yesterday = SimpleDateFormat(
-                "yyyy-MM-dd",
-                Locale.getDefault()
-            ).format(yesterdayCalendar.time)
+        val updatedHabit = habit.copy(
+            completedDays =
+                habit.completedDays + 1,
 
-            val newStreak =
-                if (habit.lastCompletedDate == yesterday) {
-                    habit.currentStreak + 1
-                } else {
-                    1
-                }
+            currentStreak =
+                newStreak,
 
-            val updatedHabit = habit.copy(
-                completedDays = habit.completedDays + 1,
-                currentStreak = newStreak,
-                longestStreak = maxOf(
+            longestStreak =
+                maxOf(
                     habit.longestStreak,
                     newStreak
                 ),
-                xp = habit.xp + 10,
-                lastCompletedDate = today
-            )
 
-            repository.updateHabit(updatedHabit)
-        }
+            xp =
+                habit.xp + 10,
+
+            lastCompletedDate =
+                today
+        )
+
+        _habits.value =
+            _habits.value.map {
+                if (it.id == habit.id) {
+                    updatedHabit
+                } else {
+                    it
+                }
+            }
     }
 }
