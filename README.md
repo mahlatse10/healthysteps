@@ -37,3 +37,7 @@ Unit tests were created using xUnit to test password hashing and password verifi
 ## GitHub Actions
 
 GitHub Actions automatically restores dependencies, builds the API and runs the automated tests.
+
+## Youtube Link Video
+
+https://youtu.be/H5MRQTYwI9M?si=wBLKku1Gi7Y6WIYJ
